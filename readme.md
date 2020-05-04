@@ -1,5 +1,4 @@
 # TDA Scraper for Value Investors
-<br>
 
 ## Summary
 Contained in this repository is a web-scraping package for getting in-depth fundamentals information from TD Ameritrade's website. The purpose of the package is to scrape a database of stock fundamentals information based on a list of tickers, then calculate a range of intrinsic value estimates for each stock, using a variety of growth metrics for projection, then finding all of the stocks which are currently trading above/below the calculated range, and determining the margins of error for each based on these calculations. From this information, value investors may make educated decisions based on wide-scale comparisons of intrinsic value comparisons on a scale which couldn't be done by hand. There are likely ways to pay for such data convenience, but this package is designed for entry-level traders who want to learn as much as possible with minimum upfront investment.<br>
@@ -12,6 +11,7 @@ Example of output for a watchlist:<br>
 Small section of an output dataframe as an example:<br>
 ![Example DataFrame](images/example_df.png)
 <br>
+
 Disclaimer: This package is meant to aid investors in their decision making, but the actions made by any individual as a result of their use of this package is completely at their own risk, and this package, or the math/approach herein, are not meant as investment advice. You should have a basic knowledge of value investing before using this package. TD Ameritrade offeres comprehensive educational material to those who have an account, which, like the account, does not cost anything.
 <br>
 <br>
