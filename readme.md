@@ -1,8 +1,10 @@
 # TDA Scraper for Value Investors
 <br>
+
 ## Summary
 Contained in this repository is a web-scraping package for getting in-depth fundamentals information from TD Ameritrade's website. The purpose of the package is to scrape a database of stock fundamentals information based on a list of tickers, then calculate a range of intrinsic value estimates for each stock, using a variety of growth metrics for projection, then finding all of the stocks which are currently trading above/below the calculated range, and determining the margins of error for each based on these calculations. From this information, value investors may make educated decisions based on wide-scale comparisons of intrinsic value comparisons on a scale which couldn't be done by hand. There are likely ways to pay for such data convenience, but this package is designed for entry-level traders who want to learn as much as possible with minimum upfront investment.<br>
 <br>
+
 Example of output for a watchlist:<br>
 ![Example Output](images/example_output.png)
 <br>
@@ -22,6 +24,7 @@ This scraper uses Alexander Golec's [python wrapper](https://github.com/alexgole
 <br>
 Selenium webdriver uses ChromeDriver to run the scraping operation, and ChromeDriver must be in your PATH. You will find the other dependencies imported in the workflow notebooks.<br>
 <br>
+
 #### Directions:
 1. Clone this repo
 2. Download/check dependencies:
@@ -32,9 +35,11 @@ Selenium webdriver uses ChromeDriver to run the scraping operation, and ChromeDr
     - [tda](https://github.com/alexgolec/tda-api) (the python wrapper for API)
     - matplotlib
 3. Run the notebooks: 1) watchlist_scraping, then 2) data_exploration
+
 <br>
 Note that it is recommended that you create two .json files on your computer: one for your TD Ameritrade login credentials, and another for your API key, to be loaded from the get_keys() function. Loading the .json files is demonstrated in the notebooks. You can also just put this info into dictionaries within your script, but this is less safe for your info as someone might see your code at some point.<br>
 <br>
+
 ## How to use
 
 The proper workflow for this package can be followed by starting with the watchlist_scraping.ipynb, then continuing to the data_exploration.ipynb.<br>
