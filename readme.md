@@ -22,7 +22,7 @@ This scraper also uses the TD Ameritrade API, so you will need an account at dev
 <br>
 This scraper uses Alexander Golec's [python wrapper](https://github.com/alexgolec/tda-api) for the TD Ameritrade API. The author highly recommends doing your own research on the code, which is lightweight and easy to read, to assure that there are no security issues for your credentials, as you are using this code at your own risk.<br>
 <br>
-Selenium webdriver uses ChromeDriver to run the scraping operation, and ChromeDriver must be in your PATH. You will find the other dependencies imported in the workflow notebooks.<br>
+Selenium webdriver uses ChromeDriver to run the scraping operation, and ChromeDriver must be in your PATH. You will find the other dependencies listed below.<br>
 <br>
 
 #### Directions:
