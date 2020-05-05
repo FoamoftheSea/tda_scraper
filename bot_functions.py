@@ -17,7 +17,7 @@ def start_bot(keys):
     """
     Starts TD Ameritrade Scraping Bot. Takes input of dictionary containing 
     username and password which must have keys "user" and "pass" with the 
-    values to be used.
+    values to be used. Returns webdriver object to be used for session.
 
     :param keys: (dict) dictionary with username ("user") and password ("pass")
     """
@@ -184,6 +184,9 @@ def calculate_intrinsic(c, ticker, root_dir, method, projection_period='5yr', ve
                 except:
                     print('No P/E information available for {}, skipping'.format(ticker))
                     return None
+             # Filter out seemingly too large/nonsensical values sometimes found on website
+            if industry_avg_pe > 100:
+                industry_avg_pe = valuation.loc['Price/Earnings (TTM, GAAP)'][ticker]
             if pe_growth == 'historic':
                 try:
                     eps_growth = float(fetch_metric(ticker, 'EPS Growth 5yr', root_dir, 'fundies'))
@@ -224,6 +227,9 @@ def calculate_intrinsic(c, ticker, root_dir, method, projection_period='5yr', ve
                 except:
                     print('No Price/Sales data for {}, skipping'.format(ticker))
                     return None
+            # Filter out seemingly too large/nonsensical values sometimes found on website
+            if industry_avg_ps > 100:
+                industry_avg_ps = valuation.loc['Price/Sales (TTM)'][ticker]
                 
             try:
                 rev_growth = float(fetch_metric(ticker, 'Revenue Growth 5yr', root_dir, 'fundies'))
@@ -262,6 +268,10 @@ def calculate_intrinsic(c, ticker, root_dir, method, projection_period='5yr', ve
                 except:
                     print('Price/Book info not available for {}, skipping'.format(ticker))
                     return None
+             # Filter out seemingly too large/nonsensical values sometimes found on website
+            if industry_avg_pb > 100:
+                industry_avg_pb = valuation.loc['Price/Book (MRQ)'][ticker]
+                
             fundies_yrly = pd.read_csv(root_dir+'/{}/fundies_yearly.csv'.format(ticker)).set_index('Unnamed: 0')
             fundies_yrly = fundies_yrly[[col for col in fundies_yrly.columns if col not in ['Report']]]
             fundies_yrly = fundies_yrly.T
@@ -1491,7 +1501,8 @@ def scrape_ticker(driver, ticker):
                         axis=0)
     # Remove duplicate rows from combined
     combined = pd.DataFrame(combined.loc[~combined.index.duplicated(keep='first')])
-    
+    for analyst in analysis.index:
+        combined.loc[analyst+' since'] = analysis.loc[analyst, 'Rating Since']
     # Produce dictionary of results
     results = {'combined':combined, 
                'summary':summary, 
