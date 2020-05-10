@@ -39,13 +39,16 @@ def start_bot(keys):
         except:
             raise ValueError("Something went wrong")
         else:
-            WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, 'Use desktop website'))
-            time.sleep(3)
-            button = WebDriverWait(driver, 10).until(lambda x: x.find_element(By.XPATH, value='//*[@id="app"]/div/div[2]/footer/div/ul/li[1]/button'))
-            button.click()
-            time.sleep(3)
-            home_url = driver.current_url
-            reduce_tabs(driver)
+            try:
+                WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, 'Use desktop website'))
+                time.sleep(3)
+                button = WebDriverWait(driver, 10).until(lambda x: x.find_element(By.XPATH, value='//*[@id="app"]/div/div[2]/footer/div/ul/li[1]/button'))
+                button.click()
+                time.sleep(3)
+                home_url = driver.current_url
+                reduce_tabs(driver)
+            except:
+                return driver
 
     return driver
 
@@ -82,6 +85,9 @@ def build_big_df(tickers, database_path):
     new_df = pd.DataFrame()
     for col in big_df:
         new_df[col] = big_df[col].astype('float64', copy=True, errors='ignore')
+    for col in new_df.columns:
+        if col.endswith('since'):
+            new_df[col] = pd.to_datetime(new_df[col], infer_datetime_format=True)
     
     return new_df
 
@@ -304,7 +310,7 @@ def compound_int(principal, interest_rate, periods, per_period=1):
         amount = principal * (1 + (interest_rate/per_period))**(periods*per_period)
         return amount
     
-def get_intrinsic_range(c, tickers, root_dir, show_prices=True):
+def get_intrinsic_range(c, tickers, root_dir, side=None, show_prices=True):
     if type(tickers) == str:
         tickers = [tickers]
     estimates = {}
@@ -367,6 +373,11 @@ def get_intrinsic_range(c, tickers, root_dir, show_prices=True):
 
     estimates = pd.DataFrame.from_dict(estimates, orient='columns')
     estimates = estimates.T
+    
+    if side == 'long':
+        estimates['Margin of Safety'] = estimates['Est Low'] / estimates['Price'] - 1
+    elif side == 'short':
+        estimates['Margin of Safety'] = estimates['Price'] / estimates['Est High'] - 1
 
     return estimates
 
@@ -375,40 +386,51 @@ def clean(x, show_errors=False):
     This function is used to clean strings containing numeric data of the 
     common issues found in TD Ameritrade's website
     """
+    #print("cleaning {} of type {}".format(x, type(x)))
+    not_date = True
+    multiple = 1
     if isinstance(x, str):
         check = re.split('/|-|, ', x)
         x = x.strip()
         x = x.replace(',','')
-        if x == '--':
-            x = np.NaN
-        elif x.startswith('(') and x.endswith(')'):
+
+        if x.startswith('(') and x.endswith(')'):
             x = x.strip('(').strip(')')
-            if x.endswith('%'):
-                x = np.float(x.strip('%'))/100
-            if x.startswith('$'):
-                x = x.strip('$')
-            x = -np.float(x)
-        elif x.endswith('%'):
-            x = np.float(x.strip('%'))/100
+            x = '-'+x
+
+        if x.endswith('%'):
+            x = x.replace('%','')
+            multiple = 1/100
         elif x.endswith('x'):
             x = x.strip('x')
             if x == '--':
                 x = np.NaN
             else:
-                x = np.float(x)
-        elif x.startswith('$') or x.startswith('-$'):
-            x = np.float(x.replace('$',''))
+                x = x
+
+        if x.endswith('k') or x.endswith('K'):
+            x = x.upper().replace('K','')
+            multiple = 1000
+
+        if x.startswith('$') or x.startswith('-$'):
+            x = x.replace('$','')
         elif len(check) > 1 and check[-1].isdigit():
+            not_date = False
             if x.startswith('(Unconfirmed)'):
                 x = x.replace('(Unconfirmed) ','')
             x = pd.to_datetime(x, infer_datetime_format=True)
-        else:
+
+        if x == '--':
+            x = np.NaN
+
+        if not_date:
             try:
-                x = float(x)
+                x = float(x) * multiple
             except:
                 if show_errors:
                     print(x) 
                 x = np.NaN
+    #print('returning {}'.format(x))
     return x            
 
 def fetch_metric(ticker, metric, root_dir, file_name, year=None):
@@ -699,7 +721,7 @@ def search_symbol(driver, ticker):
     # Give extra time for webpage to load
     time.sleep(4)
 
-def scrape_analysts(driver, ticker, search_first=True):
+def scrape_analysts(driver, ticker, search_first=True, internet_speed='fast'):
     """
     This function scrapes the "Analyst Reports" tab of a TD Ameritrade security
     lookup page
@@ -710,11 +732,20 @@ def scrape_analysts(driver, ticker, search_first=True):
                                 security when set to False. Leave set to True
                                 unless you are sure you are already on the
                                 desired security, or the wrong data will scrape
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Search symbol first if flag is True
     if search_first:
         search_symbol(driver, ticker)
 
+        if internet_speed == 'slow':
+            time.sleep(1)
+
+    if internet_speed == 'fast':
+        sleep_time = 1
+    elif internet_speed == 'slow':
+        sleep_time = 2
     # Find iframe with tabs (main iframe)
     driver.switch_to.default_content()
     iframes = WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_tag_name("iframe"))
@@ -723,7 +754,7 @@ def scrape_analysts(driver, ticker, search_first=True):
     # Switch to Analyst Reports tab
     WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, 'Summary'))
     driver.find_element_by_xpath('//*[@id="layout-full"]/nav/ul/li[8]/a').click()
-    time.sleep(1)
+    time.sleep(sleep_time)
 
     # Wait for conditions before soup is made
     driver.switch_to.default_content()
@@ -806,7 +837,7 @@ def scrape_analysts(driver, ticker, search_first=True):
     
     return temp
     
-def scrape_earnings(driver, ticker, search_first=True):
+def scrape_earnings(driver, ticker, search_first=True, internet_speed='fast'):
     """
     This function scrapes the "Earnings" tab of a TD Ameritrade security
     lookup page
@@ -817,10 +848,19 @@ def scrape_earnings(driver, ticker, search_first=True):
                                 security when set to False. Leave set to True
                                 unless you are sure you are already on the
                                 desired security, or the wrong data will scrape
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Search for symbol if flag is True
     if search_first:
         search_symbol(driver, ticker)
+        if internet_speed == 'slow':
+            time.sleep(1)
+
+    if internet_speed == 'fast':
+        sleep_time = 1
+    elif internet_speed == 'slow':
+        sleep_time = 2
     
     # Find main iframe:  
     driver.switch_to.default_content()    
@@ -833,7 +873,7 @@ def scrape_earnings(driver, ticker, search_first=True):
     
     # Switch to Earnings Analysis (1st sub tab)
     WebDriverWait(driver,10).until(lambda x: x.find_element_by_xpath('//*[@id="layout-full"]/div[4]/nav/nav/a[1]')).click()
-    time.sleep(1)
+    time.sleep(sleep_time)
     
     # Wait for conditions before making soup
     WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, 'Annual Earnings History and Estimates'))
@@ -931,7 +971,7 @@ def scrape_earnings(driver, ticker, search_first=True):
 
     return earn_df, earnings_yrly
         
-def scrape_fundamentals(driver, ticker, search_first=True):
+def scrape_fundamentals(driver, ticker, search_first=True, internet_speed='fast'):
     """
     This function scrapes the "Fundamentals" tab of a TD Ameritrade security
     lookup page
@@ -942,12 +982,20 @@ def scrape_fundamentals(driver, ticker, search_first=True):
                                 security when set to False. Leave set to True
                                 unless you are sure you are already on the
                                 desired security, or the wrong data will scrape
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Search symbol first if flag is True
     if search_first:
         search_symbol(driver, ticker)
         #tabs = get_tab_links()
     
+    if internet_speed == 'fast':
+        sleep_time = 1
+    elif internet_speed == 'slow':
+        sleep_time = 2
+        time.sleep(1)
+
     # Gets Overview
     driver.switch_to.default_content()
     iframes = WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_tag_name("iframe"))
@@ -955,7 +1003,7 @@ def scrape_fundamentals(driver, ticker, search_first=True):
     WebDriverWait(driver,10).until(lambda x: x.find_element_by_xpath('//*[@id="layout-full"]/nav/ul/li[5]/a')).click()
     #time.sleep(1)
     WebDriverWait(driver,10).until(lambda x: x.find_element_by_xpath('//*[@id="layout-full"]/div[4]/nav/nav/a[1]')).click()
-    time.sleep(1)
+    time.sleep(sleep_time)
     driver.switch_to.default_content()
     iframes = WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_tag_name("iframe"))
     driver.switch_to.frame(iframes[3])
@@ -1074,7 +1122,7 @@ def scrape_fundamentals(driver, ticker, search_first=True):
     def scrape_report(name, xpath):
         # Switch to Appropriate Report
         driver.find_element_by_xpath(xpath).click()
-        time.sleep(1)
+        time.sleep(sleep_time)
         iframes = WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_tag_name("iframe"))
         driver.switch_to.frame(iframes[3])
         driver.switch_to.default_content()
@@ -1172,7 +1220,7 @@ def scrape_fundamentals(driver, ticker, search_first=True):
 
     return temp, yearly
 
-def scrape_summary(driver, ticker, search_first=True, return_full=False):
+def scrape_summary(driver, ticker, search_first=True, return_full=False, internet_speed='fast'):
     """
     This function scrapes the "Summary" tab of a TD Ameritrade security
     lookup page
@@ -1185,12 +1233,21 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
                                 desired security, or the wrong data will scrape
     :param return_full: (bool) will return dataframe with extra column containing
                                feature descriptions for the rows.
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Search symbol first if flag is True:
     if search_first:
         search_symbol(driver, ticker)
+        if internet_speed == 'slow':
+            time.sleep(1)
     #tabs = get_tab_links()
     #driver.get(tabs['Summary'])
+
+    if internet_speed == 'fast':
+        sleep_time = 1
+    elif internet_speed == 'slow':
+        sleep_time = 2
 
     # Find main iframe
     driver.switch_to.default_content()
@@ -1205,7 +1262,7 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
     element = driver.find_element_by_xpath('//*[@id="stock-summarymodule"]/div/div/div[2]/div')
     WebDriverWait(driver, 10).until(lambda x: EC.visibility_of_element_located(element))
     # Add extra time for data to load
-    time.sleep(1)
+    time.sleep(sleep_time)
     
     # Make soup and find elements
     soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -1335,7 +1392,7 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
         temp = temp.append(pd.Series([[],
                                  float(temp.loc["Annual Dividend/Yield",1].split('/')[1].strip('%'))/100
                                  ],
-                                name="Annual Yield %"))
+                                name="Annual Dividend %"))
     else:
         dividend_given = False
         temp = temp.append(pd.Series([[],
@@ -1345,7 +1402,7 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
         temp = temp.append(pd.Series([[],
                                  np.NaN
                                  ],
-                                name="Annual Yield %"))
+                                name="Annual Dividend %"))
     temp.rename(columns={1:ticker}, inplace = True)
     drop = ["Day's Change", 
             "Day's Range",
@@ -1396,7 +1453,12 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
     
     # Convert date info to datetime if it exists
     if dividend_given:
-        temp['Ex-dividend'] = pd.to_datetime(temp['Ex-dividend'], infer_datetime_format=True)
+        try:
+            temp['Ex-dividend'] = pd.to_datetime(temp['Ex-dividend Date'], infer_datetime_format=True)
+        except:
+            temp['Ex-dividend'] = pd.to_datetime(temp['Ex-dividend'], infer_datetime_format=True)
+        temp['Dividend Pay Date'] = pd.to_datetime(temp['Dividend Pay Date'], infer_datetime_format=True)
+
     # Try to force any remaining numbers to floats:
     temp = temp.astype('float64', errors='ignore')
     temp = temp.T   
@@ -1404,7 +1466,7 @@ def scrape_summary(driver, ticker, search_first=True, return_full=False):
 
     return temp
 
-def scrape_ticker(driver, ticker):
+def scrape_ticker(driver, ticker, errors='ignore', internet_speed='fast'):
     """
     This function scrapes every tab of a security based on ticker passed.
     Each scrape will be attempted 5 times before being skipped, as it is 
@@ -1413,6 +1475,8 @@ def scrape_ticker(driver, ticker):
 
     :param driver: (Selenium webdriver) webdriver returned from start_bot()
     :param ticker: (str) ticker symbol to scrape
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Getting Summary
     success = False
@@ -1420,14 +1484,17 @@ def scrape_ticker(driver, ticker):
     while not success:
         tries += 1
         try:
-            summary = scrape_summary(driver, ticker)
+            summary = scrape_summary(driver, ticker, internet_speed=internet_speed)
             success = True
         except:
             print("Failed to gather summary for {} on attempt {}".format(ticker, tries))
         if tries >= 5:    
             print("Too many failed attempts for summary of {}, skipping to next df.".format(ticker))
-            summary = pd.DataFrame(column=[ticker])
-            break
+            summary = pd.DataFrame(columns=[ticker])
+            if errors == 'raise':
+                raise
+            elif errors == 'ignore':
+                break
 
     # Getting Earnings
     success = False
@@ -1435,7 +1502,7 @@ def scrape_ticker(driver, ticker):
     while not success:
         tries += 1
         try:
-            earnings, earnings_yearly = scrape_earnings(driver, ticker, search_first=False)
+            earnings, earnings_yearly = scrape_earnings(driver, ticker, search_first=False, internet_speed=internet_speed)
             success = True
         except:
             print("Failed to gather earnings for {} on attempt {}".format(ticker, tries))
@@ -1443,7 +1510,10 @@ def scrape_ticker(driver, ticker):
             print("Too many failed attempts for earnings of {}, skipping to next df.".format(ticker))
             earnings = pd.DataFrame(columns=[ticker])
             earnings_yearly = pd.DataFrame(columns=[ticker])
-            break
+            if errors == 'raise':
+                raise
+            elif errors == 'ignore':
+                break
     
     # Getting fundamentals
     success = False
@@ -1451,7 +1521,7 @@ def scrape_ticker(driver, ticker):
     while not success:
         tries += 1
         try:
-            fundies, fundies_yearly = scrape_fundamentals(driver, ticker, search_first=False)
+            fundies, fundies_yearly = scrape_fundamentals(driver, ticker, search_first=False, internet_speed=internet_speed)
             success = True
         except:
             print("Failed to gather fundamentals for {} on attempt {}".format(ticker, tries))
@@ -1459,7 +1529,10 @@ def scrape_ticker(driver, ticker):
             print("Too many failed attempts for fundamentals of {}, skipping to next df.".format(ticker))
             fundies = pd.DataFrame(columns=[ticker])
             fundies_yearly = pd.DataFrame(columns=[ticker])
-            break
+            if errors == 'raise':
+                raise
+            elif errors == 'ignore':
+                break
 
     # Getting valuation
     success = False
@@ -1467,14 +1540,17 @@ def scrape_ticker(driver, ticker):
     while not success:
         tries += 1
         try:
-            valuation = scrape_valuation(driver, ticker, search_first=False)
+            valuation = scrape_valuation(driver, ticker, search_first=False, internet_speed=internet_speed)
             success = True
         except:
             print("Failed to gather valuation for {} on attempt {}".format(ticker, tries))
         if tries >= 5:
             print("Too many failed attempts for valuation of {}, skipping to next df.".format(ticker))
             valuation = pd.DataFrame(columns=[ticker])
-            break
+            if errors == 'raise':
+                raise
+            elif errors == 'ignore':
+                break
     
     # Getting analyst reports
     success = False
@@ -1482,14 +1558,17 @@ def scrape_ticker(driver, ticker):
     while not success:
         tries += 1
         try:
-            analysis = scrape_analysts(driver, ticker, search_first=False)
+            analysis = scrape_analysts(driver, ticker, search_first=False, internet_speed=internet_speed)
             success = True
         except:
             print("Failed to gather analysts for {} on attempt {}".format(ticker, tries))
         if tries >= 5:
             print("Too many failed attempts for analysts of {}, skipping to next df.".format(ticker))
             analysis = pd.DataFrame(columns=[ticker])
-            break
+            if errors == 'raise':
+                raise
+            elif errors == 'ignore':
+                break
     
     # Create combined 1D df for later stacking
     combined = pd.concat([summary[ticker].drop(index=['Shares Outstanding']),
@@ -1515,7 +1594,7 @@ def scrape_ticker(driver, ticker):
               }
     return results
 
-def scrape_valuation(driver, ticker, search_first=True):
+def scrape_valuation(driver, ticker, search_first=True, internet_speed='fast'):
     """
     This function scrapes the "Valuation" tab of a TD Ameritrade security
     lookup page
@@ -1526,11 +1605,18 @@ def scrape_valuation(driver, ticker, search_first=True):
                                 security when set to False. Leave set to True
                                 unless you are sure you are already on the
                                 desired security, or the wrong data will scrape
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                                to slow page loading times.
     """
     # Search symbol first if flag is True
     if search_first:
         search_symbol(driver, ticker)
 
+    if internet_speed == 'fast':
+        sleep_time = 2
+    elif internet_speed == 'slow':
+        sleep_time = 3
+        time.sleep(1)
     # Find main iframe
     driver.switch_to.default_content()
     iframes = WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_tag_name("iframe"))
@@ -1579,7 +1665,7 @@ def scrape_valuation(driver, ticker, search_first=True):
         WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, '{} vs Industry'.format(ticker)))
         element = WebDriverWait(driver, 10).until(lambda x: x.find_element_by_xpath('//*[@id="stock-valuationmodule"]/div/div[1]/div[2]'))
         WebDriverWait(driver, 10).until(lambda x: EC.text_to_be_present_in_element(x, '{} Analysis'.format(name)))
-        time.sleep(2)
+        time.sleep(sleep_time)
         # Prevents breaking when there is no info on a tab, by waiting for condition
         try:
             element = driver.find_element_by_xpath('//*[@id="stock-valuationmodule"]/div/div/div[2]/table/tbody/tr[1]/td[2]')
@@ -1620,7 +1706,8 @@ def scrape_valuation(driver, ticker, search_first=True):
     return valuation_df
 
 def scrape_watchlist(driver, tickers, name, root_dir='', skip_finished=True, 
-                     save_df=False, errors='ignore', return_skipped=False, ):
+                     save_df=False, errors='ignore', return_skipped=False, 
+                     internet_speed='fast'):
     """
     Main wrapper function for scraper. Can do large lists of securities,
     and will store the data into assigned directory (can be set with kwarg)
@@ -1628,12 +1715,14 @@ def scrape_watchlist(driver, tickers, name, root_dir='', skip_finished=True,
     :param driver: selenium webdriver
     :param tickers: (list) ticker symbols
     :param name: (str) name of watchlist
+    :param root_dir: (str) directory to save database to. Will use current working
+                            directory if none passed.
     :param save_df: (bool) Whether to save the combined df to disk
     :param errors: (str) 'raise' or 'ignore'
     :param return_skipped: (bool) can return list of skipped securities if
                             ignoring errors
-
-    pass {'root_dir': <user root directory} to change root directory from default
+    :param internet_speed: (str) set to 'slow' if bot is not working properly due
+                            to slow page loading times.
     """
     # Make list for skipped securities if needed
     if return_skipped == True:
@@ -1660,7 +1749,7 @@ def scrape_watchlist(driver, tickers, name, root_dir='', skip_finished=True,
         
         # Scrape security
         try:
-            results = scrape_ticker(driver, ticker)
+            results = scrape_ticker(driver, ticker, errors=errors, internet_speed=internet_speed)
         except:
             print("Did not successfully scrape {}".format(ticker))
             if errors == 'raise':
