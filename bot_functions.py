@@ -92,7 +92,7 @@ def build_big_df(tickers, database_path):
     return new_df
 
 def calculate_intrinsic(c, ticker, root_dir, method, projection_period='5yr', verbose=False,
-                        pe_growth='estimate', beta=None, rfr=None, market_return=None, 
+                        pe_growth='estimate', beta=None, rfr=None, market_return=None,
                         shares_out=None, price=None, eps=None):
     """
     This function calculates the intrinsic value of a stock based on the growth metric
@@ -1705,8 +1705,8 @@ def scrape_valuation(driver, ticker, search_first=True, internet_speed='fast'):
     
     return valuation_df
 
-def scrape_watchlist(driver, tickers, name, root_dir='', skip_finished=True, 
-                     save_df=False, errors='ignore', return_skipped=False, 
+def scrape_watchlist(driver, tickers, name, root_dir='', skip_finished=True,
+                     save_df=False, errors='ignore', return_skipped=False,
                      internet_speed='fast'):
     """
     Main wrapper function for scraper. Can do large lists of securities,
